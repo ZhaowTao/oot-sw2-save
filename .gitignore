@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Never commit save files or dumps of them
+*.sav
+*.sav.bak
+save/
+save.work/
+*.savedump
+*.json.dump
+
+# macOS
+.DS_Store
