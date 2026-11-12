@@ -36,6 +36,10 @@ against 1,939 of the 1,953 field names published by the community editor. Once
 you know that, a field name becomes a testable hypothesis instead of a 32-bit
 number you have to guess.
 
+How that was established, including the eight hash functions that produced
+exactly zero matches and the brute-force pass that recovered 55 keys and none of
+them real, is written up in [`docs/DISCOVERY.md`](docs/DISCOVERY.md).
+
 This project is built on both facts: it edits *all* slots *and* the working
 copy in one command, and it resolves any field by name.
 
@@ -203,7 +207,8 @@ change unless you write a longer string.
 | `ootsw2/savedir.py` | the six rotating slots, the `save.work` mirror, backups |
 | `ootsw2/fields.py` | the dictionary, with a self-check against the hash |
 | `ootsw2/cli.py` | the commands above |
-| `docs/FORMAT.md` | the full format write-up, including what is still unknown |
+| [`docs/FORMAT.md`](docs/FORMAT.md) | the full format write-up, including what is still unknown |
+| [`docs/DISCOVERY.md`](docs/DISCOVERY.md) | the debugging log: how the hash was found, and the four wrong answers before it |
 
 The dictionary ships **1,984 field names**, of which 1,970 satisfy
 `field_id(name) == key` — they are self-verifying, not copied on trust.

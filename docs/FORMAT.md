@@ -6,6 +6,9 @@ Everything below was derived by reading actual save files produced by
 value written to disk shows up in game, a value the game writes shows up on
 disk. Where something is still a guess it is marked **unconfirmed**.
 
+The order in which these conclusions were reached — and the wrong ones that
+came first — is in [`DISCOVERY.md`](DISCOVERY.md).
+
 ---
 
 ## 1. Directory layout
