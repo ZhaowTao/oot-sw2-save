@@ -1,8 +1,8 @@
 # oot-sw2-save
 
-Read and edit save files from **The Legend of Zelda: Ocarina of Time** on
-Nintendo Switch 2 (the 2026 remake — not the N64 original, not OoT3D, not Ship
-of Harkinian).
+A **save editor** for **The Legend of Zelda: Ocarina of Time** on Nintendo
+Switch 2 (the 2026 remake — not the N64 original, not OoT3D, not Ship of
+Harkinian).
 
 [![tests](https://github.com/ZhaowTao/oot-sw2-save/actions/workflows/tests.yml/badge.svg)](https://github.com/ZhaowTao/oot-sw2-save/actions/workflows/tests.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

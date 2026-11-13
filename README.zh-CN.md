@@ -1,6 +1,6 @@
 # oot-sw2-save
 
-读写 **《塞尔达传说 时之笛》Nintendo Switch 2 重制版**（2026 年 11 月发售）的存档。
+**《塞尔达传说 时之笛》Nintendo Switch 2 重制版**（2026 年 11 月发售）的**存档编辑器**。
 不是 N64 原版，不是 3DS 版，也不是 Ship of Harkinian。
 
 [![tests](https://github.com/ZhaowTao/oot-sw2-save/actions/workflows/tests.yml/badge.svg)](https://github.com/ZhaowTao/oot-sw2-save/actions/workflows/tests.yml)
