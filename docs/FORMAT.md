@@ -169,6 +169,31 @@ Because the derivation is known, a name is a *testable hypothesis*:
 in the file. That is how `PlayerStatus.DiveDepth` was found, and it is the tool
 you want for mapping the remaining unnamed fields.
 
+### 3.2 One thing, two fields
+
+Some state is recorded twice, in two fields with different jobs, and editing the
+visible one changes nothing that matters.
+
+| looks like the ability | is the ability |
+|---|---|
+| `PouchData.Item_Scale_Gold.StockNum` — a gold scale in the pouch | `PlayerStatus.DiveDepth` — actually permits 9 m |
+
+| looks like the item | is the record of acquiring it |
+|---|---|
+| `PouchData.Armor_Child_Mask_Bunny.StockNum` | `IsGet.Armor_Child_Mask_Bunny` |
+
+A normal playthrough proves they are independent: after selling the Bunny Hood,
+the game itself writes `IsGet = 1` with `StockNum = 0` — obtained, no longer
+carried. Setting `StockNum = 1` on a mask the save has no `IsGet` for leaves an
+item the game never recorded acquiring, and the mask shop's story, which runs off
+`HappyMaskShop_FirstTimeTalk`, `HappyMaskShop_RentedMaskChoice` and
+`IsAfterSell_Mask_Bunny`, stops matching its own state.
+
+Two consequences, both learned the hard way:
+
+* a change you can see in a menu is not a change that took effect;
+* removing an item is two writes, not one.
+
 ---
 
 ## 4. Value encoding
