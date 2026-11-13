@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ootsw2"
 version = "0.4.0"
-description = "Read and edit save files from The Legend of Zelda: Ocarina of Time (Nintendo Switch 2)"
+description = "Save editor for The Legend of Zelda: Ocarina of Time on Nintendo Switch 2"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Wentao Zhao" }]
-keywords = ["zelda", "ocarina-of-time", "save-editor", "switch2", "nintendo", "reverse-engineering"]
+keywords = ["zelda", "ocarina-of-time", "oot", "save-editor", "savegame", "switch2", "nintendo", "reverse-engineering"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
