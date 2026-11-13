@@ -77,6 +77,39 @@ than that is describing a different game.
 All commands accept either a single `*.sav` file or a whole save directory.
 Pointed at a directory, they default to the slot the game would load.
 
+### First: can an edit take effect at all?
+
+```console
+$ ootsw2 doctor "<save root>"
+root     /Users/dawn/Library/Application Support/nxnative/0400486024DEC000
+
+  ok    the game is not writing (its log last changed 7.5 h ago), newest save change 7.5 h ago
+  ok    save/ and save.work/ agree (14 files)
+  ok    6 slots parse, 11926 field(s) each
+  ok    the game loads slot_02 (2026-11-13 13:23, manual, TimeTemple)
+        by file time; the game's own clock is checked next
+  ok    file times and the game's clock both point at slot_02 (2 slots share 2026-11-13 13:23)
+  ok    6 backups next to the save
+        newest: 0400486024DEC000-save-BEFORE_DIVE-20261113_0157
+
+6 checks, all clear
+```
+
+Exit code is `0` all clear, `1` something to look at, `2` something is broken —
+so it drops into a script. `--json` gives a front end the same findings.
+
+The three checks that matter are the three ways an edit goes silently wrong,
+and each one names the file it compared:
+
+| finding | means |
+|---|---|
+| `running` | the engine's log was written seconds ago; it flushes its memory over the directory on exit |
+| `work-differs` | `save/` and `save.work/` disagree, and the engine mounts the work copy while it runs |
+| `clock-conflict` | file times and the game's own clock point at different slots, which is what a restored backup looks like |
+
+The fourth failure mode — a field that draws a number without granting anything
+— cannot be seen from the directory. That one is in the [format notes](docs/FORMAT.md).
+
 ### See which slot is live
 
 ```console
@@ -241,6 +274,7 @@ change unless you write a longer string.
 | `ootsw2/container.py` | the container: table, payload, string pool, in-place writes |
 | `ootsw2/hash.py` | MurmurHash3-32 and the name → key derivation |
 | `ootsw2/savedir.py` | the six rotating slots, the `save.work` mirror, `caption.sav`, backups |
+| `ootsw2/doctor.py` | the checks behind `doctor`, as data, so a front end can run them |
 | `ootsw2/fields.py` | the dictionary, with a self-check against the hash |
 | `ootsw2/cli.py` | the commands above |
 | [`docs/FORMAT.md`](docs/FORMAT.md) | the full format write-up, including what is still unknown |

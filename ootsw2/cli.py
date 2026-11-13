@@ -15,6 +15,7 @@ import time
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .container import SaveFile, SaveFormatError, is_inline_scalar
+from .doctor import OK, examine, exit_code
 from .fields import DICTIONARY, resolve_field
 from .hash import field_id
 from .savedir import SaveDirectory, find_title_dirs, read_thumbnail
@@ -442,6 +443,46 @@ def cmd_thumb(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    directory = SaveDirectory(args.path)
+    findings = examine(directory)
+
+    if args.json:
+        print(json.dumps([finding.__dict__ for finding in findings], indent=2,
+                         ensure_ascii=False))
+        return exit_code(findings)
+
+    print(f"root     {directory.root}")
+    print()
+    for finding in findings:
+        print(f"  {finding.level:<5} {finding.message}")
+        if finding.detail:
+            for line in _wrap(finding.detail, 72):
+                print(f"        {line}")
+
+    ok = sum(1 for finding in findings if finding.level == OK)
+    problems = len(findings) - ok
+    print()
+    if problems:
+        print(f"{ok} ok, {problems} to look at")
+    else:
+        print(f"{ok} checks, all clear")
+    return exit_code(findings)
+
+
+def _wrap(text: str, width: int) -> List[str]:
+    words, lines, current = text.split(), [], ""
+    for word in words:
+        if current and len(current) + 1 + len(word) > width:
+            lines.append(current)
+            current = word
+        else:
+            current = f"{current} {word}".strip()
+    if current:
+        lines.append(current)
+    return lines
+
+
 def cmd_verify_dict(args: argparse.Namespace) -> int:
     bad = DICTIONARY.unverified()
     print(f"dictionary entries: {len(DICTIONARY)}")
@@ -472,7 +513,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Field names are resolved with murmur3_32(name); see "
                "`ootsw2 names` for the built-in dictionary.",
     )
-    parser.add_argument("--version", action="version", version="ootsw2 0.3.0")
+    parser.add_argument("--version", action="version", version="ootsw2 0.4.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_target(p: argparse.ArgumentParser) -> None:
@@ -541,6 +582,12 @@ def build_parser() -> argparse.ArgumentParser:
                          help="show what would be written, write nothing")
     p_thumb.add_argument("--json", action="store_true")
     p_thumb.set_defaults(func=cmd_thumb)
+
+    p_doctor = sub.add_parser("doctor",
+                              help="check why an edit would or would not take effect")
+    p_doctor.add_argument("path")
+    p_doctor.add_argument("--json", action="store_true")
+    p_doctor.set_defaults(func=cmd_doctor)
 
     p_verify = sub.add_parser("verify-dict", help="check the dictionary against the hash")
     p_verify.set_defaults(func=cmd_verify_dict)

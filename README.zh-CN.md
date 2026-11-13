@@ -58,6 +58,36 @@ pipx install git+https://github.com/ZhaowTao/oot-sw2-save
 
 所有命令既可以指向单个 `*.sav` 文件，也可以指向整个存档目录。指向目录时默认操作**游戏会加载的那个槽位**。
 
+### 第一步：这次改动到底能不能生效
+
+```console
+$ ootsw2 doctor "<存档根目录>"
+root     /Users/dawn/Library/Application Support/nxnative/0400486024DEC000
+
+  ok    the game is not writing (its log last changed 7.5 h ago), newest save change 7.5 h ago
+  ok    save/ and save.work/ agree (14 files)
+  ok    6 slots parse, 11926 field(s) each
+  ok    the game loads slot_02 (2026-11-13 13:23, manual, TimeTemple)
+        by file time; the game's own clock is checked next
+  ok    file times and the game's clock both point at slot_02 (2 slots share 2026-11-13 13:23)
+  ok    6 backups next to the save
+        newest: 0400486024DEC000-save-BEFORE_DIVE-20261113_0157
+
+6 checks, all clear
+```
+
+退出码 `0` 全部通过、`1` 有需要看的项、`2` 有坏文件，可以直接放进脚本。`--json` 把同一份结论交给前端。
+
+真正要紧的是三项，它们正好对应「改了但没生效」的三种原因，而且每一项都说清了自己比对了哪个文件：
+
+| 结论 | 含义 |
+|---|---|
+| `running` | 引擎日志几秒前还在写，退出时会把内存状态整份盖回目录 |
+| `work-differs` | `save/` 和 `save.work/` 不一致，而运行期间引擎挂的是 work 副本 |
+| `clock-conflict` | 文件时间和游戏自己的时钟指向不同槽位，这正是「还原过备份」的样子 |
+
+第四种失败原因（字段只负责显示、不给能力）从目录上看不出来，写在[格式说明](docs/FORMAT.md)里。
+
 ### 看哪个槽位是当前生效的
 
 ```console
