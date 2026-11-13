@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from .container import SaveFile, SaveFormatError, is_inline_scalar
 from .fields import DICTIONARY, resolve_field
 from .hash import field_id
-from .savedir import SaveDirectory, find_title_dirs
+from .savedir import SaveDirectory, find_title_dirs, read_thumbnail
 
 
 # --------------------------------------------------------------------- helpers
@@ -378,11 +378,67 @@ def cmd_slots(args: argparse.Namespace) -> int:
     thumbnail = next((slot.caption.thumbnail for slot in slots
                       if slot.caption and slot.caption.thumbnail), None)
     if thumbnail:
-        print(f"\nthumbnails: {thumbnail[0]}x{thumbnail[1]} JPEG in each caption.sav")
+        print(f"\nthumbnails: {thumbnail[0]}x{thumbnail[1]} JPEG in each caption.sav "
+              f"(ootsw2 thumb exports them)")
 
     if directory.running_hint():
         print("\n! something wrote to this save tree in the last 30 s -- "
               "quit the game before editing")
+    return 0
+
+
+def cmd_thumb(args: argparse.Namespace) -> int:
+    directory = SaveDirectory(args.path)
+    slots = directory.slots()
+    if not slots:
+        raise SystemExit(f"{directory.save_dir}: no slots")
+    if args.index is not None:
+        slots = [slot for slot in slots if slot.index == args.index]
+        if not slots:
+            raise SystemExit(f"{directory.save_dir}: no slot_{args.index:02d}")
+
+    written = []
+    for slot in slots:
+        caption = slot.caption
+        blob = read_thumbnail(slot.caption_path) if slot.caption_path else None
+        row = {
+            "slot": slot.label,
+            "saved": caption.saved_at if caption else None,
+            "kind": caption.kind if caption else None,
+            "location": caption.location if caption else None,
+            "width": caption.thumbnail[0] if caption and caption.thumbnail else None,
+            "height": caption.thumbnail[1] if caption and caption.thumbnail else None,
+            "bytes": len(blob) if blob else None,
+            "path": None,
+        }
+        if blob is not None:
+            if not args.dry_run:
+                os.makedirs(args.out, exist_ok=True)
+                target = os.path.join(args.out, f"{slot.label}.jpg")
+                with open(target, "wb") as handle:
+                    handle.write(blob)
+                row["path"] = target
+            written.append(row)
+        else:
+            row["error"] = "no JPEG in caption.sav"
+            written.append(row)
+
+    if args.json:
+        print(json.dumps(written, indent=2, ensure_ascii=False))
+        return 0
+
+    print(f"{'SLOT':<8}{'SAVED (game clock)':<20}{'KIND':<8}{'LOCATION':<20}"
+          f"{'PIXELS':>10}{'KB':>7}  FILE")
+    for row in written:
+        pixels = f"{row['width']}x{row['height']}" if row["width"] else "-"
+        size = f"{row['bytes'] / 1024:.0f}" if row["bytes"] else "-"
+        note = row["path"] or row.get("error") or "(dry run)"
+        print(f"{row['slot']:<8}{(row['saved'] or '-'):<20}{(row['kind'] or '-'):<8}"
+              f"{(row['location'] or '-')[:20]:<20}{pixels:>10}{size:>7}  {note}")
+
+    if not args.dry_run and written:
+        print(f"\n{len(written)} thumbnail(s) -> {args.out}")
+        print("These are the images the game's own Load screen draws, byte for byte.")
     return 0
 
 
@@ -416,7 +472,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Field names are resolved with murmur3_32(name); see "
                "`ootsw2 names` for the built-in dictionary.",
     )
-    parser.add_argument("--version", action="version", version="ootsw2 0.2.0")
+    parser.add_argument("--version", action="version", version="ootsw2 0.3.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_target(p: argparse.ArgumentParser) -> None:
@@ -474,6 +530,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_slots.add_argument("path")
     p_slots.add_argument("--json", action="store_true")
     p_slots.set_defaults(func=cmd_slots)
+
+    p_thumb = sub.add_parser("thumb", help="export each slot's Load-screen thumbnail")
+    p_thumb.add_argument("path")
+    p_thumb.add_argument("-o", "--out", default="thumbs",
+                         help="directory to write the JPEGs into (default: thumbs)")
+    p_thumb.add_argument("-i", "--index", type=int,
+                         help="only this slot index")
+    p_thumb.add_argument("--dry-run", action="store_true",
+                         help="show what would be written, write nothing")
+    p_thumb.add_argument("--json", action="store_true")
+    p_thumb.set_defaults(func=cmd_thumb)
 
     p_verify = sub.add_parser("verify-dict", help="check the dictionary against the hash")
     p_verify.set_defaults(func=cmd_verify_dict)

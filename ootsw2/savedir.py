@@ -44,7 +44,14 @@ from typing import Dict, List, Optional
 
 from .container import SaveFile
 
-__all__ = ["SlotInfo", "Caption", "SaveDirectory", "find_title_dirs", "read_caption"]
+__all__ = [
+    "SlotInfo",
+    "Caption",
+    "SaveDirectory",
+    "find_title_dirs",
+    "read_caption",
+    "read_thumbnail",
+]
 
 PROGRESS = "progress.sav"
 CAPTION = "caption.sav"
@@ -68,12 +75,30 @@ class Caption:
     stage_path: Optional[str] = None
     autosave: Optional[bool] = None
     thumbnail: Optional[tuple] = None       # (width, height) of the embedded JPEG
+    thumbnail_bytes: Optional[int] = None   # its length in the file
 
     @property
     def kind(self) -> str:
         if self.autosave is None:
             return "-"
         return "auto" if self.autosave else "manual"
+
+
+def _jpeg_span(blob: bytes) -> Optional[tuple]:
+    """Start and end offsets of the embedded JPEG, or ``None``.
+
+    The thumbnail is the last thing in the file: in every slot written by the
+    game the JPEG runs from offset 1396 to EOF, so a scan for the end marker
+    and a fallback to EOF give the same answer.  A truncated file therefore
+    still yields its bytes rather than being rejected.
+    """
+    start = blob.find(_JPEG_SOI)
+    if start < 0:
+        return None
+    end = blob.rfind(b"\xff\xd9")
+    if end <= start:
+        end = len(blob) - 2
+    return (start, end + 2)
 
 
 def _jpeg_size(blob: bytes, start: int) -> Optional[tuple]:
@@ -89,6 +114,18 @@ def _jpeg_size(blob: bytes, start: int) -> Optional[tuple]:
             return (width, height)
         i += 2 + int.from_bytes(blob[i + 2:i + 4], "big")
     return None
+
+
+def read_thumbnail(path: str) -> Optional[bytes]:
+    """The JPEG the Load screen shows for this slot, ready to write to disk."""
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as handle:
+        blob = handle.read()
+    span = _jpeg_span(blob)
+    if span is None:
+        return None
+    return blob[span[0]:span[1]]
 
 
 def read_caption(path: str) -> Optional[Caption]:
@@ -115,9 +152,10 @@ def read_caption(path: str) -> Optional[Caption]:
         except TypeError:  # pragma: no cover - guarded by the check above
             caption.saved_at = None
 
-    start = bytes(save.data).find(_JPEG_SOI)
-    if start >= 0:
-        caption.thumbnail = _jpeg_size(bytes(save.data), start)
+    span = _jpeg_span(bytes(save.data))
+    if span is not None:
+        caption.thumbnail = _jpeg_size(bytes(save.data), span[0])
+        caption.thumbnail_bytes = span[1] - span[0]
     return caption
 
 

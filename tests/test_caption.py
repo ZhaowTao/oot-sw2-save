@@ -168,3 +168,86 @@ def test_map_marker_fields_are_named():
     from ootsw2.fields import DICTIONARY
     assert DICTIONARY.id_of("Player_Pos_For_Map") == 0x960AD56A
     assert DICTIONARY.id_of("Player_Rot_For_Map") == 0xA4AEE8CD
+
+
+# --------------------------------------------------------------- thumbnails
+
+
+def test_thumbnail_is_returned_byte_for_byte(tmp_path):
+    from ootsw2.savedir import read_thumbnail
+
+    path = write_caption(tmp_path / "caption.sav")
+    blob = read_thumbnail(str(path))
+    assert blob == fake_jpeg()
+    assert blob.startswith(b"\xff\xd8")
+    assert blob.endswith(b"\xff\xd9")
+
+
+def test_thumbnail_length_is_recorded(tmp_path):
+    caption = read_caption(str(write_caption(tmp_path / "caption.sav")))
+    assert caption.thumbnail_bytes == len(fake_jpeg())
+
+
+def test_no_thumbnail_in_a_caption_without_one(tmp_path):
+    from ootsw2.savedir import read_thumbnail
+
+    path = write_caption(tmp_path / "caption.sav", jpeg=False)
+    assert read_thumbnail(str(path)) is None
+
+
+def test_missing_file_yields_no_thumbnail(tmp_path):
+    from ootsw2.savedir import read_thumbnail
+
+    assert read_thumbnail(str(tmp_path / "nope.sav")) is None
+
+
+def test_thumb_command_writes_one_jpeg_per_slot(slot_dir, tmp_path, capsys):
+    for index in range(6):
+        write_caption(slot_dir / "save" / f"slot_{index:02d}" / "caption.sav",
+                      location=f"Room{index}")
+    out = tmp_path / "thumbs"
+    code = main(["thumb", str(slot_dir), "-o", str(out)])
+    written = capsys.readouterr().out
+    assert code == 0
+    files = sorted(p.name for p in out.iterdir())
+    assert files == [f"slot_{index:02d}.jpg" for index in range(6)]
+    assert (out / "slot_03.jpg").read_bytes() == fake_jpeg()
+    assert "543x306" in written
+
+
+def test_thumb_command_can_pick_one_slot(slot_dir, tmp_path):
+    for index in range(6):
+        write_caption(slot_dir / "save" / f"slot_{index:02d}" / "caption.sav")
+    out = tmp_path / "thumbs"
+    assert main(["thumb", str(slot_dir), "-o", str(out), "-i", "2"]) == 0
+    assert [p.name for p in out.iterdir()] == ["slot_02.jpg"]
+
+
+def test_thumb_command_dry_run_writes_nothing(slot_dir, tmp_path, capsys):
+    for index in range(6):
+        write_caption(slot_dir / "save" / f"slot_{index:02d}" / "caption.sav")
+    out = tmp_path / "thumbs"
+    assert main(["thumb", str(slot_dir), "-o", str(out), "--dry-run"]) == 0
+    assert not out.exists()
+    assert "dry run" in capsys.readouterr().out
+
+
+def test_thumb_command_reports_a_slot_without_an_image(slot_dir, tmp_path, capsys):
+    write_caption(slot_dir / "save" / "slot_00" / "caption.sav", jpeg=False)
+    out = tmp_path / "thumbs"
+    assert main(["thumb", str(slot_dir), "-o", str(out)]) == 0
+    assert "no JPEG" in capsys.readouterr().out
+
+
+def test_thumb_json_has_what_a_front_end_would_need(slot_dir, tmp_path, capsys):
+    write_caption(slot_dir / "save" / "slot_01" / "caption.sav", location="Market",
+                  autosave=0)
+    assert main(["thumb", str(slot_dir), "-o", str(tmp_path / "t"),
+                 "--json", "-i", "1"]) == 0
+    row = json.loads(capsys.readouterr().out)[0]
+    assert row["slot"] == "slot_01"
+    assert row["location"] == "Market"
+    assert row["kind"] == "manual"
+    assert row["width"] == 543 and row["height"] == 306
+    assert row["bytes"] == len(fake_jpeg())
+

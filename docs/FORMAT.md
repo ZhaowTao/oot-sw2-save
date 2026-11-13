@@ -22,7 +22,7 @@ native recompilation layer it looks like this:
 ├── option.sav            42 KB   options, dialogue language
 ├── slot_00/
 │   ├── progress.sav      ~169 KB  the actual playthrough
-│   └── caption.sav       41 KB   per-slot Saria's-song / caption state
+│   └── caption.sav      ~32-42 KB one Load-screen entry: clock, place, thumbnail
 ├── ...
 └── slot_05/
 ```
@@ -271,7 +271,19 @@ autosave flag and the location, and says so when the two orderings disagree.
 After the strings the file carries a **JPEG thumbnail**, `543×306`, starting at
 `FF D8 FF` — offset 1396 in every slot on this build. It is why `caption.sav`
 sizes differ from slot to slot (31.8 KB – 42.1 KB) even though the table is
-identical. `ootsw2 slots` reads the dimensions out of the JPEG header.
+identical.
+
+The layout of the file is exactly two things, and nothing else:
+
+```
+0      .. 1396   the container: header, 79-entry key table, string payload
+1396   .. EOF    a complete JPEG, SOI to EOI, with no trailing bytes
+```
+
+Checked on all six slots: the end marker `FF D9` is the last two bytes of the
+file in every one (`file size - 2`), so the thumbnail can be copied out by
+slicing from the first `FF D8` to EOF without decoding anything. That is what
+`ootsw2 thumb` does; it writes the same bytes the game writes, not a re-encode.
 
 ---
 

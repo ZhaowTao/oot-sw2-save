@@ -17,7 +17,7 @@ from .fields import DICTIONARY, FieldDictionary, resolve_field
 from .hash import field_id, murmur3_32
 from .savedir import SaveDirectory, SlotInfo, find_title_dirs
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "DICTIONARY",

@@ -8,6 +8,12 @@ of Harkinian).
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](pyproject.toml)
 
+![The six save slots, with the labels and thumbnails the game's own Load screen draws](docs/img/load-screen.jpg)
+
+*Six saves, not one. The game rotates through all of them and loads the newest;
+`ootsw2 thumb` lifts these frames out of `caption.sav`, where each one sits as a
+543×306 JPEG.*
+
 ---
 
 ## Why this exists
@@ -93,6 +99,32 @@ The time, location and autosave flag are read from `caption.sav` — the same
 record the Load screen draws — rather than from file mtimes, which a backup or a
 copy rewrites. `--json` is available, and `ootsw2 roots` finds save directories
 on this machine if you would rather not type the path.
+
+### Get the screenshots back out
+
+Each `caption.sav` ends in a complete JPEG, sliced out and written unchanged:
+
+```console
+$ ootsw2 thumb "<save root>" -o thumbs
+SLOT    SAVED (game clock)  KIND    LOCATION                PIXELS     KB  FILE
+slot_00 2026-11-13 13:13    auto    HyruleField            543x306     32  thumbs/slot_00.jpg
+slot_01 2026-11-13 13:23    auto    TimeTemple             543x306     30  thumbs/slot_01.jpg
+slot_02 2026-11-13 13:23    manual  TimeTemple             543x306     30  thumbs/slot_02.jpg
+slot_03 2026-11-13 13:17    auto    Market                 543x306     36  thumbs/slot_03.jpg
+slot_04 2026-11-13 13:15    auto    KakarikoVillage        543x306     40  thumbs/slot_04.jpg
+slot_05 2026-11-13 13:19    auto    LonLonRanch            543x306     36  thumbs/slot_05.jpg
+
+6 thumbnail(s) -> thumbs
+```
+
+No decoding, no re-encoding: these are the bytes the game put there. Useful for
+a save browser, for backing up the one part of a playthrough that is a picture,
+or for remembering which slot is which. `-i 2` takes a single slot, `--dry-run`
+writes nothing, `--json` gives a front end the size and the caption fields.
+
+To arrange all six into the image at the top of this page, see
+[`examples/load_screen_sheet.py`](examples/load_screen_sheet.py) (needs Pillow;
+the library itself does not).
 
 ### Read fields by name
 

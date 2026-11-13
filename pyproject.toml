@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ootsw2"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read and edit save files from The Legend of Zelda: Ocarina of Time (Nintendo Switch 2)"
 readme = "README.md"
 requires-python = ">=3.9"

@@ -6,6 +6,11 @@
 [![tests](https://github.com/ZhaowTao/oot-sw2-save/actions/workflows/tests.yml/badge.svg)](https://github.com/ZhaowTao/oot-sw2-save/actions/workflows/tests.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![六个存档槽位，标签和缩略图都取自游戏自己的读档界面](docs/img/load-screen.jpg)
+
+*是六个存档，不是一个。游戏在六个槽位之间轮换并只读最新那个；`ootsw2 thumb`
+把这几张画面从 `caption.sav` 里原样取出来 —— 每个槽位里就存着一张 543×306 的 JPEG。*
+
 ---
 
 ## 为什么要做这个
@@ -72,6 +77,27 @@ thumbnails: 543x306 JPEG in each caption.sav
 ```
 
 保存时间、地点、自动/手动这三项是从 `caption.sav` 里读的 —— 也就是游戏 Load 界面显示的那份记录本身，而不是文件 mtime（备份或拷贝会重写 mtime）。`--json` 可用；`ootsw2 roots` 可以自动找本机的存档目录。
+
+### 把界面截图取出来
+
+每个 `caption.sav` 的末尾就是一张完整的 JPEG，直接切出来，一个字节都不动：
+
+```console
+$ ootsw2 thumb "<存档根目录>" -o thumbs
+SLOT    SAVED (game clock)  KIND    LOCATION                PIXELS     KB  FILE
+slot_00 2026-11-13 13:13    auto    HyruleField            543x306     32  thumbs/slot_00.jpg
+slot_01 2026-11-13 13:23    auto    TimeTemple             543x306     30  thumbs/slot_01.jpg
+slot_02 2026-11-13 13:23    manual  TimeTemple             543x306     30  thumbs/slot_02.jpg
+slot_03 2026-11-13 13:17    auto    Market                 543x306     36  thumbs/slot_03.jpg
+slot_04 2026-11-13 13:15    auto    KakarikoVillage        543x306     40  thumbs/slot_04.jpg
+slot_05 2026-11-13 13:19    auto    LonLonRanch            543x306     36  thumbs/slot_05.jpg
+
+6 thumbnail(s) -> thumbs
+```
+
+不解码、不重编码：这些就是游戏自己写进去的字节。可以用来做存档浏览器、单独备份「整段游戏里唯一是画面的那部分」，或者只是分辨哪个槽是哪个。`-i 2` 只取一个槽，`--dry-run` 不写盘，`--json` 把尺寸和 caption 字段交给前端。
+
+要把六张排成本页顶部那张图，见 [`examples/load_screen_sheet.py`](examples/load_screen_sheet.py)（需要 Pillow；库本身不需要）。
 
 ### 按名字读字段
 
