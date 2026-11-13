@@ -60,16 +60,18 @@ $ ootsw2 slots "<存档根目录>"
 root     /Users/dawn/Library/Application Support/nxnative/0400486024DEC000
 work copy present (6 slot(s))
 
-SLOT    WRITTEN                    SIZE  FIELDS  IN save.work  STATUS
-slot_00 2026-11-13 02:11:23      169408   11926          same
-slot_01 2026-11-13 02:10:11      169344   11926          same
-slot_02 2026-11-13 02:13:47      169504   11926          same
-slot_03 2026-11-13 02:11:58      169464   11926          same
-slot_04 2026-11-13 02:15:39      169440   11926          same  ACTIVE (game loads this)
-slot_05 2026-11-13 02:14:27      169416   11926          same
+SLOT    SAVED (game clock)  KIND    LOCATION            SIZE  FIELDS   WORK  STATUS
+slot_00 2026-11-13 13:13    auto    HyruleField       173944   11926   same
+slot_01 2026-11-13 13:23    auto    TimeTemple        174016   11926   same
+slot_02 2026-11-13 13:23    manual  TimeTemple        174016   11926   same  ACTIVE (game loads this)
+slot_03 2026-11-13 13:17    auto    Market            173960   11926   same
+slot_04 2026-11-13 13:15    auto    KakarikoVillage   173944   11926   same
+slot_05 2026-11-13 13:19    auto    LonLonRanch       174008   11926   same
+
+thumbnails: 543x306 JPEG in each caption.sav
 ```
 
-`ootsw2 roots` 可以自动找本机的存档目录。
+保存时间、地点、自动/手动这三项是从 `caption.sav` 里读的 —— 也就是游戏 Load 界面显示的那份记录本身，而不是文件 mtime（备份或拷贝会重写 mtime）。`--json` 可用；`ootsw2 roots` 可以自动找本机的存档目录。
 
 ### 按名字读字段
 

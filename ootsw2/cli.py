@@ -318,22 +318,67 @@ def cmd_slots(args: argparse.Namespace) -> int:
     work = directory.slots(source="save.work")
     work_by_index = {slot.index: slot for slot in work}
 
-    print(f"root     {directory.root}")
-    print(f"work copy {'present' if directory.has_work_copy else 'absent'} "
-          f"({len(work)} slot(s))")
-    print()
-    print(f"{'SLOT':<8}{'WRITTEN':<22}{'SIZE':>9}{'FIELDS':>8}{'IN save.work':>14}  STATUS")
+    if not args.json:
+        print(f"root     {directory.root}")
+        print(f"work copy {'present' if directory.has_work_copy else 'absent'} "
+              f"({len(work)} slot(s))")
+        print()
+
+    rows = []
     for slot in slots:
-        stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(slot.mtime))
+        caption = slot.caption
         try:
-            save = SaveFile(slot.progress_path)
-            fields = str(len(save))
+            fields = str(len(SaveFile(slot.progress_path)))
         except SaveFormatError:
             fields = "?"
         peer = work_by_index.get(slot.index)
         same = "same" if peer and peer.size == slot.size else ("differs" if peer else "-")
-        status = "ACTIVE (game loads this)" if active and slot.index == active.index else ""
-        print(f"{slot.label:<8}{stamp:<22}{slot.size:>9}{fields:>8}{same:>14}  {status}")
+        rows.append({
+            "slot": slot.label,
+            "index": slot.index,
+            "saved": (caption.saved_at if caption and caption.saved_at else "-"),
+            "kind": caption.kind if caption else "-",
+            "location": (caption.location if caption and caption.location else "-"),
+            "size": slot.size,
+            "fields": fields,
+            "work": same,
+            "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(slot.mtime)),
+            "active": bool(active and slot.index == active.index),
+        })
+
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        if directory.running_hint():
+            print("! something wrote to this save tree in the last 30 s", file=sys.stderr)
+        return 0
+
+    location_width = min(max((len(r["location"]) for r in rows), default=8), 22)
+    print(f"{'SLOT':<8}{'SAVED (game clock)':<20}{'KIND':<8}"
+          f"{'LOCATION':<{location_width}}{'SIZE':>9}{'FIELDS':>8}{'WORK':>7}  STATUS")
+    for row in rows:
+        location = row["location"]
+        if len(location) > location_width:
+            location = location[: location_width - 1] + "…"
+        status = "ACTIVE (game loads this)" if row["active"] else ""
+        print(f"{row['slot']:<8}{row['saved']:<20}{row['kind']:<8}"
+              f"{location:<{location_width}}{row['size']:>9}{row['fields']:>8}"
+              f"{row['work']:>7}  {status}")
+
+    if directory.ordering_conflict():
+        newest_by_clock = max(
+            (row for row in rows if row["saved"] != "-"),
+            key=lambda row: row["saved"],
+            default=None,
+        )
+        if newest_by_clock:
+            print(f"\n! file times and the game's own clock disagree: {newest_by_clock['slot']} "
+                  f"is the newest save ({newest_by_clock['saved']}), but another slot has a "
+                  f"newer file time. Copying or restoring the tree rewrites mtimes.")
+
+    thumbnail = next((slot.caption.thumbnail for slot in slots
+                      if slot.caption and slot.caption.thumbnail), None)
+    if thumbnail:
+        print(f"\nthumbnails: {thumbnail[0]}x{thumbnail[1]} JPEG in each caption.sav")
 
     if directory.running_hint():
         print("\n! something wrote to this save tree in the last 30 s -- "
@@ -371,7 +416,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Field names are resolved with murmur3_32(name); see "
                "`ootsw2 names` for the built-in dictionary.",
     )
-    parser.add_argument("--version", action="version", version="ootsw2 0.1.0")
+    parser.add_argument("--version", action="version", version="ootsw2 0.2.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_target(p: argparse.ArgumentParser) -> None:
@@ -427,6 +472,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_slots = sub.add_parser("slots", help="show the rotating slots of a save directory")
     p_slots.add_argument("path")
+    p_slots.add_argument("--json", action="store_true")
     p_slots.set_defaults(func=cmd_slots)
 
     p_verify = sub.add_parser("verify-dict", help="check the dictionary against the hash")

@@ -53,6 +53,11 @@ It is not a strict round-robin, but it does move, and **loading picks exactly
 one of them** — the most recently written one. A tool that edits a single
 `progress.sav` is therefore right about one sixth of the time.
 
+"Most recently written" is the game's own clock in `caption.sav` (§4.4), not the
+file mtime. Observed on one directory: five autosaves landed on `slot_00`,
+`slot_01`, `slot_03`, `slot_04`, `slot_05` and one manual save on `slot_02` — so
+six slots do get used, and a pair of them can share the same minute.
+
 ### 1.2 The engine mounts the working copy, not `save/`
 
 While the game runs, the save filesystem it sees is `save.work`, described by
@@ -79,7 +84,7 @@ offset  size  meaning
 8       4     header_end            offset where the key/value table ends
 12      28    reserved, zero
 40      -     key/value table
-header_end    payload
+header_end    typed payload: fixed-size records, see §4.2
 ```
 
 ### 2.1 Key/value table
@@ -184,12 +189,38 @@ Floats are IEEE-754 single precision, little-endian. Because `9.0f` is
 `0x41100000` (1,091,567,616) a float is usually identifiable by being a large
 word that decodes to a sane float.
 
-### 4.2 Payload offset (strings)
+### 4.2 Payload record (fixed-size)
 
-String-valued fields store an offset into the payload region rather than a
-number. At that offset sits a NUL-terminated ASCII string.
+A value that is not an inline scalar is an **absolute offset into the file** at
+which a fixed-size record starts. Records are not variable-length and there is
+no tag byte in front of them.
 
-| field | word | payload at that offset |
+| record | size | written by |
+|---|---|---|
+| `String64` | 64 B | NUL-padded UTF-8 identifier |
+| `String32` | 32 B | NUL-padded UTF-8 identifier |
+| `Vector3` | 12 B | three `float32` |
+| array of 4 | 260 B | `u32` count (4), then 4 × 64 B slots |
+
+The sizes come from the game's own save schema as read by the recompilation
+layer's OoT tooling ([`seedds/nxnative` #2002](https://github.com/seedds/nxnative/pull/2002),
+`HEADER_END` / `SIZE` in `scripts/ocarina_test_save.py`), and they are confirmed
+here on real saves:
+
+* Every string-valued field in `progress.sav` except one sits on a **64-byte
+  grid** — offsets 112004, 112068, (112132 empty), 112196 … Gaps of 128 bytes are
+  an unused slot in the middle, which is why the pool looks sparse.
+* The single exception was a field holding `167280`: a large integer whose value
+  lands inside the payload, where the byte at that offset is `0x56` (`"V"`). It
+  was a false positive of the reader, not a record. The reader now requires at
+  least four characters, because the shortest real entry in six slots is 11
+  characters (`HyruleField`).
+* `caption.sav` ends in a **543×306 JPEG** (`FF D8 FF` at offset 1396 in every
+  slot on this build), which is the thumbnail the Load screen draws.
+
+Field by field:
+
+| field | word | record at that offset |
 |---|---|---|
 | `PlayerStatus.EquipWeapon` | 112772 | `Weapon_Sword_Master` |
 | `PlayerStatus.EquipShield` | 112068 | `Weapon_Shield_Hylian` |
@@ -203,8 +234,9 @@ schema. A reader has to infer it, and the only reliable discriminator found so
 far is:
 
 > If the word lies inside the payload region and the bytes there form a
-> printable, uppercase-initial, NUL-terminated ASCII string, treat it as an
-> offset; otherwise treat it as an inline scalar.
+> printable, uppercase-initial, NUL-terminated ASCII string of at least four
+> characters, treat it as an offset to a string record; otherwise treat it as an
+> inline scalar.
 
 That heuristic is what `ootsw2.container.is_inline_scalar` implements. It is
 correct on every field the dictionary names, and it is the reason the CLI shows
@@ -216,7 +248,30 @@ Replacing a string with one of the same length or shorter overwrites it in
 place. A longer string is appended to the payload and the offset is repointed;
 the file grows by a few bytes, which is exactly what the game itself does.
 Neither operation disturbs any other field, because nothing else points into
-that particular string.
+that particular slot.
+
+### 4.4 `caption.sav`: what the Load screen shows
+
+Each slot's `caption.sav` is the record the Load menu draws. Same container,
+79 table entries, and these are the ones that matter:
+
+| field | id | type | meaning |
+|---|---|---|---|
+| location name | `0xF74E0E8E` | `String64` | `HyruleField`, `KakarikoVillage`, `TimeTemple` … |
+| stage path | `0x0CCCC6CD` | `String64` | `Folder/Stage`, e.g. `KakarikoVillage/KakarikoVillage_Child` |
+| autosave flag | `0x25F03CAA` | `u32` | `1` autosave, `0` manual save |
+| clock | `0x9811A3F7` … `0x27853BF7` | 5 × `u32` | year, month, day, hour, minute |
+| save position | `0x8B26618E` | `Vector3` | where the caption's map pin goes |
+
+The clock is the game's own, minute resolution, and it is the honest answer to
+"which slot is newest". File mtimes are only a proxy: copying a save tree or
+restoring a backup rewrites them. `ootsw2 slots` prints the game clock, the
+autosave flag and the location, and says so when the two orderings disagree.
+
+After the strings the file carries a **JPEG thumbnail**, `543×306`, starting at
+`FF D8 FF` — offset 1396 in every slot on this build. It is why `caption.sav`
+sizes differ from slot to slot (31.8 KB – 42.1 KB) even though the table is
+identical. `ootsw2 slots` reads the dimensions out of the JPEG header.
 
 ---
 
@@ -238,11 +293,15 @@ In order:
 
 ## 6. What is still unknown
 
-* **The payload region beyond strings.** It clearly holds more than a string
-  pool — around 310 field values point into it, and not all of those offsets
-  land on printable text. Arrays and sets are probably in there.
-  *Unconfirmed.*
-* **The true names of 11,926 − 1,970 fields.** Roughly 83 % of a
+* **The arrays and the packed integers at the start of the payload.** The
+  payload is not only string records: it opens with packed small integers
+  (looks like counts and index lists) and about 310 field values point into it,
+  of which only a minority land on a string. The record sizes are known (§4.2)
+  but the *meaning* of most of these blocks is not. *Unconfirmed.*
+* **Why the string pool starts 44 bytes off a 64-byte boundary.** The pool
+  itself is 64-byte aligned (§4.2), but the region before it is a whole number of
+  64-byte records plus 44 bytes. Not explained.
+* **The true names of 11,926 − 1,972 fields.** Roughly 83 % of a
   `progress.sav` is unnamed. They are not enumerable by brute force: hashing
   9.2 million plausible combinations out of the game's own string table
   recovered fewer than 60, most of them coincidences.
@@ -250,6 +309,28 @@ In order:
 * **Whether a newly added field is honoured.** The table has spare entries and
   `ootsw2 add` can fill one, but only fields the game already knows about have
   been verified to take effect.
+* **How the Load list is ordered when two slots share a minute.** The clock in
+  `caption.sav` has minute resolution, so a tie has to be broken by something
+  else — file order, slot index, or a second counter that was not found.
+
+## 6.1 Sources for the block sizes
+
+The record sizes in §4.2 and the three fields that decide where a load puts Link
+(`Sequence_CurrentBanc`, `PlayerStatus.SavePos`, `PlayerStatus.SavePosRadY`) were
+published independently in [`seedds/nxnative` #2002](https://github.com/seedds/nxnative/pull/2002)
+(`scripts/ocarina_test_save.py`), which also credits Traiver's field catalog for
+the hash. Two things were checked here rather than taken on trust:
+
+1. **The hash constants.** All eleven named fields in that script hash to
+   exactly the ids it declares, using `field_id()` in this repository — an
+   independent third confirmation of MurmurHash3 (after the reference test
+   vectors and the 1,939/1,953 agreement).
+2. **The keys.** `Player_Pos_For_Map` and `Player_Rot_For_Map` were missing from
+   this dictionary; both keys are present in all six slots here, so they were
+   added. The script's four unnamed ids (`0x874C7ED4` quest step,
+   `0x4A6BDB7D` last stage, `0x8773F02D` last position, `0xC458F1EB` location
+   array) are likewise present, but carry no name, so they stay reachable by
+   numeric id only.
 
 ---
 

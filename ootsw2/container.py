@@ -8,11 +8,13 @@ Every save file in the save directory -- ``progress.sav``, ``caption.sav``,
     offset 8    u32   header_end  (end of the key/value table)
     offset 12   ..    reserved, zero
     offset 40   header_end        entries of 8 bytes: [u32 key][u32 value]
-    header_end  EOF               variable-length payload (string pool, ...)
+    header_end  EOF               typed payload: fixed-size records
 
-A ``value`` is either an inline scalar or, for string fields, an offset into
-the payload where a NUL-terminated UTF-8 string lives.  There is no checksum,
-so a field can be rewritten in place without touching anything else.
+A ``value`` is either an inline scalar or an offset into the payload where a
+fixed-size record lives: a NUL-padded string in a 64-byte slot, a 12-byte
+vector, or an array (a count followed by fixed-size elements).  There is no
+checksum and no type tag, so a field can be rewritten in place without touching
+anything else.
 
 See ``docs/FORMAT.md`` for the full description and how it was derived.
 """
@@ -42,6 +44,13 @@ HEADER_SIZE = 40
 ENTRY_SIZE = 8
 
 _MAX_STRING_LEN = 96
+# Game identifiers in the pool are all long ("Weapon_Sword_Master",
+# "HyruleField", "Goto_HyruleCastle").  A one- or two-character "string" is
+# always an integer array whose bytes happen to be printable: a field holding
+# 167280 used to come back as "V" (0x56), because that value lands inside the
+# payload and the byte there is 0x56.  The shortest real entry measured across
+# six slots is 11 characters, so four is a safe floor.
+_MIN_STRING_LEN = 4
 
 
 class SaveFormatError(ValueError):
@@ -56,7 +65,7 @@ def _looks_like_string(blob: bytes, offset: int) -> Optional[str]:
     if end <= offset:
         return None
     raw = blob[offset:end]
-    if not raw:
+    if len(raw) < _MIN_STRING_LEN:
         return None
     # Pool entries are game identifiers: printable ASCII starting uppercase.
     if not (0x41 <= raw[0] <= 0x5A):

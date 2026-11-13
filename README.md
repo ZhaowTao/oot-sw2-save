@@ -78,17 +78,21 @@ $ ootsw2 slots "<save root>"
 root     /Users/dawn/Library/Application Support/nxnative/0400486024DEC000
 work copy present (6 slot(s))
 
-SLOT    WRITTEN                    SIZE  FIELDS  IN save.work  STATUS
-slot_00 2026-11-13 02:11:23      169408   11926          same
-slot_01 2026-11-13 02:10:11      169344   11926          same
-slot_02 2026-11-13 02:13:47      169504   11926          same
-slot_03 2026-11-13 02:11:58      169464   11926          same
-slot_04 2026-11-13 02:15:39      169440   11926          same  ACTIVE (game loads this)
-slot_05 2026-11-13 02:14:27      169416   11926          same
+SLOT    SAVED (game clock)  KIND    LOCATION            SIZE  FIELDS   WORK  STATUS
+slot_00 2026-11-13 13:13    auto    HyruleField       173944   11926   same
+slot_01 2026-11-13 13:23    auto    TimeTemple        174016   11926   same
+slot_02 2026-11-13 13:23    manual  TimeTemple        174016   11926   same  ACTIVE (game loads this)
+slot_03 2026-11-13 13:17    auto    Market            173960   11926   same
+slot_04 2026-11-13 13:15    auto    KakarikoVillage   173944   11926   same
+slot_05 2026-11-13 13:19    auto    LonLonRanch       174008   11926   same
+
+thumbnails: 543x306 JPEG in each caption.sav
 ```
 
-`ootsw2 roots` finds save directories on this machine if you would rather not
-type the path.
+The time, location and autosave flag are read from `caption.sav` — the same
+record the Load screen draws — rather than from file mtimes, which a backup or a
+copy rewrites. `--json` is available, and `ootsw2 roots` finds save directories
+on this machine if you would rather not type the path.
 
 ### Read fields by name
 
@@ -204,13 +208,13 @@ change unless you write a longer string.
 |---|---|
 | `ootsw2/container.py` | the container: table, payload, string pool, in-place writes |
 | `ootsw2/hash.py` | MurmurHash3-32 and the name → key derivation |
-| `ootsw2/savedir.py` | the six rotating slots, the `save.work` mirror, backups |
+| `ootsw2/savedir.py` | the six rotating slots, the `save.work` mirror, `caption.sav`, backups |
 | `ootsw2/fields.py` | the dictionary, with a self-check against the hash |
 | `ootsw2/cli.py` | the commands above |
 | [`docs/FORMAT.md`](docs/FORMAT.md) | the full format write-up, including what is still unknown |
 | [`docs/DISCOVERY.md`](docs/DISCOVERY.md) | the debugging log: how the hash was found, and the four wrong answers before it |
 
-The dictionary ships **1,984 field names**, of which 1,970 satisfy
+The dictionary ships **1,986 field names**, of which 1,972 satisfy
 `field_id(name) == key` — they are self-verifying, not copied on trust.
 `ootsw2 verify-dict` prints the 14 that do not, all of them legacy
 `<Dungeon>.SmallKeyNum` aliases whose real names are still unknown.
@@ -221,7 +225,7 @@ The dictionary ships **1,984 field names**, of which 1,970 satisfy
 
 ```bash
 python3 -m pip install -e ".[dev]"
-python3 -m pytest -q          # 51 tests, no game data needed
+python3 -m pytest -q          # 65 tests, no game data needed
 ```
 
 The tests build synthetic containers from scratch, so they run anywhere and

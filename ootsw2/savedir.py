@@ -13,6 +13,11 @@ rotating slots::
         save.work/          <- what the engine actually mounts while running
         env.txt
 
+``caption.sav`` is the file the Load screen draws from: the location, the game's
+own save clock, an autosave/manual flag, and a 543×306 JPEG thumbnail.  It is
+read here so a listing can show what the game will show, instead of guessing
+from file mtimes.
+
 Three facts, each of which silently breaks an edit if you get it wrong:
 
 1. **The game writes to a different slot every time it saves.**  It does not
@@ -39,10 +44,81 @@ from typing import Dict, List, Optional
 
 from .container import SaveFile
 
-__all__ = ["SlotInfo", "SaveDirectory", "find_title_dirs"]
+__all__ = ["SlotInfo", "Caption", "SaveDirectory", "find_title_dirs", "read_caption"]
 
 PROGRESS = "progress.sav"
 CAPTION = "caption.sav"
+
+# caption.sav describes one slot for the Load screen: where it was saved, when,
+# whether it was an autosave, and a 543x306 JPEG thumbnail.
+CAPTION_POS = 0x8B26618E
+CAPTION_LOCATION = 0xF74E0E8E
+CAPTION_STAGE_PATH = 0x0CCCC6CD
+CAPTION_AUTOSAVE = 0x25F03CAA
+CAPTION_TIME = (0x9811A3F7, 0xDFD840D3, 0xBD46F485, 0x23F3D75E, 0x27853BF7)
+_JPEG_SOI = b"\xff\xd8\xff"
+
+
+@dataclass
+class Caption:
+    """What the Load screen shows for one slot."""
+
+    saved_at: Optional[str] = None          # "2026-11-13 13:23", game's own clock
+    location: Optional[str] = None
+    stage_path: Optional[str] = None
+    autosave: Optional[bool] = None
+    thumbnail: Optional[tuple] = None       # (width, height) of the embedded JPEG
+
+    @property
+    def kind(self) -> str:
+        if self.autosave is None:
+            return "-"
+        return "auto" if self.autosave else "manual"
+
+
+def _jpeg_size(blob: bytes, start: int) -> Optional[tuple]:
+    """Width and height from the first SOF marker after ``start``."""
+    i = start + 2
+    while i < len(blob) - 9:
+        if blob[i] != 0xFF:
+            return None
+        marker = blob[i + 1]
+        if marker in (0xC0, 0xC1, 0xC2):
+            height = int.from_bytes(blob[i + 5:i + 7], "big")
+            width = int.from_bytes(blob[i + 7:i + 9], "big")
+            return (width, height)
+        i += 2 + int.from_bytes(blob[i + 2:i + 4], "big")
+    return None
+
+
+def read_caption(path: str) -> Optional[Caption]:
+    """Parse a ``caption.sav``, or return ``None`` when it cannot be read."""
+    if not os.path.isfile(path):
+        return None
+    try:
+        save = SaveFile(path)
+    except (OSError, ValueError):
+        return None
+
+    caption = Caption()
+    caption.location = save.get_str(CAPTION_LOCATION)
+    caption.stage_path = save.get_str(CAPTION_STAGE_PATH)
+
+    autosave = save.get_int(CAPTION_AUTOSAVE)
+    if autosave is not None:
+        caption.autosave = bool(autosave)
+
+    stamp = [save.get_int(field) for field in CAPTION_TIME]
+    if all(value is not None for value in stamp) and 1900 < stamp[0] < 2200:
+        try:
+            caption.saved_at = "%04d-%02d-%02d %02d:%02d" % tuple(stamp)
+        except TypeError:  # pragma: no cover - guarded by the check above
+            caption.saved_at = None
+
+    start = bytes(save.data).find(_JPEG_SOI)
+    if start >= 0:
+        caption.thumbnail = _jpeg_size(bytes(save.data), start)
+    return caption
 
 
 @dataclass
@@ -57,6 +133,10 @@ class SlotInfo:
     @property
     def label(self) -> str:
         return f"slot_{self.index:02d}"
+
+    @property
+    def caption(self) -> Optional[Caption]:
+        return read_caption(self.caption_path) if self.caption_path else None
 
 
 def find_title_dirs() -> List[str]:
@@ -137,6 +217,23 @@ class SaveDirectory:
         if not slots:
             return None
         return max(slots, key=lambda s: s.mtime)
+
+    def ordering_conflict(self, *, source: str = "save") -> bool:
+        """True when the newest file is not the newest save by its own clock.
+
+        File mtimes are a proxy: copying a save tree, or restoring a backup,
+        rewrites them.  ``caption.sav`` carries the clock the Load screen shows.
+        When the two disagree the game's own clock is the one to trust, and the
+        caller should say so rather than silently pick a slot.
+        """
+        slots = self.slots(source=source)
+        stamped = [(slot, slot.caption) for slot in slots]
+        stamped = [(s, c) for s, c in stamped if c and c.saved_at]
+        if len(stamped) < 2:
+            return False
+        newest_file = max(stamped, key=lambda pair: pair[0].mtime)[1].saved_at
+        newest_clock = max(stamped, key=lambda pair: pair[1].saved_at)[1].saved_at
+        return newest_file != newest_clock
 
     def open_slot(self, index: int, *, source: str = "save") -> SaveFile:
         base = self.save_dir if source == "save" else self.work_dir
